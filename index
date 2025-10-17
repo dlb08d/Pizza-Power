@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>🍕 Pizza Power</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🍕%3C/text%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<meta name="color-scheme" content="dark light" />
+<style>
+  :root{ --ink:#e8f0ff; --ink-dim:#b7cfe2; --bg:#0b0f14; --panel:#14202c; --accent:#2a7be2; --good:#36d268; --warn:#ffb84d; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #wrap{ max-width:980px; margin:0 auto; padding:12px; }
+  #hud{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+  .pill{ background:var(--panel); border:1px solid #203041; padding:6px 10px; border-radius:8px; min-height:28px; display:flex; align-items:center; gap:6px; }
+  .pill b{ color:var(--warn); }
+  #helpTip{ margin-left:auto; font-size:13px; color:var(--ink-dim); }
+  #gameCanvas{ width:100%; height:auto; border:4px solid var(--accent); border-radius:12px; background:#0a1410; image-rendering:pixelated; display:block; }
+  .overlay{ position:fixed; inset:0; display:none; place-items:center; z-index:10; padding:18px; }
+  #startOverlay{ display:grid; background: radial-gradient(ellipse at 50% 40%, #14202c 0%, #0b0f14 60%, #0b0f14 100%); }
+  .card{ width:min(920px, 96%); background:var(--panel); border:1px solid #203041; border-radius:12px; padding:18px; display:grid; gap:12px; }
+  .title{ font-size:28px; }
+  .tag{ color:var(--ink-dim); }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .btn{ background:#1e3347; border:2px solid #2d4e6b; color:var(--ink); border-radius:10px; padding:10px 14px; font-size:16px; cursor:pointer; }
+  .btn:active{ background:#2d4e6b; }
+  .seg{ display:flex; gap:6px; background:#101a24; border:1px solid #1e2b38; padding:6px; border-radius:10px; }
+  .seg button{ background:#162435; border:1px solid #22354a; color:var(--ink); padding:8px 12px; border-radius:8px; }
+  .seg button[aria-pressed="true"]{ background:#2a7be2; }
+  .how{ background:#101a24; border:1px solid #1e2b38; border-radius:10px; padding:12px; }
+  .how ul{ margin:8px 0 0 18px; }
+  #resultOverlay{ background:rgba(0,0,0,0.55); }
+  .stats{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+  .stat{ background:#101a24; border:1px solid #1e2b38; border-radius:10px; padding:10px; text-align:center; }
+  .big{ font-size:22px; color:#ffdd55; }
+  #comboBig{ position:fixed; inset:0; display:none; place-items:center; z-index:9; pointer-events:none; }
+  #comboBig .msg{ font-size:min(8vw,64px); font-weight:900; text-align:center; padding:16px 20px; border-radius:12px; background:rgba(0,0,0,0.35); }
+  #combo{ margin-top:8px; text-align:center; min-height:28px; font-weight:bold; }
+  #touch{ position:sticky; bottom:0; display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:10px; }
+  #touch button{ padding:12px 10px; border-radius:10px; background:#1e3347; border:2px solid #2d4e6b; color:var(--ink); font-size:16px; }
+  @media (min-width:900px){ #touch{ display:none; } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div class="pill">Score: <b id="score">0</b></div>
+    <div class="pill">Streak: <b id="streak">0</b></div>
+    <div class="pill">Orders: <b id="ordersLeft">10</b></div>
+    <div id="helpTip">Press <b>Space/Enter</b> to Bake • Arrows to adjust</div>
+    <button class="btn" id="muteBtnHUD" aria-pressed="false">🔈 Sound: On</button>
+  </div>
+  <canvas id="gameCanvas" width="960" height="540" aria-label="Pizza Power game canvas"></canvas>
+  <div id="combo"></div>
+  <div id="touch">
+    <button id="wMinus">− Whole</button>
+    <button id="wPlus">+ Whole</button>
+    <button id="sMinus">− Slice</button>
+    <button id="sPlus">+ Slice</button>
+    <button id="bake">Bake</button>
+  </div>
+</div>
+<section id="comboBig" class="overlay"><div class="msg" id="comboBigMsg">POW!</div></section>
+<section id="startOverlay" class="overlay" role="dialog" aria-modal="true">
+  <div class="card">
+    <div class="title">🍕 Pizza Power</div>
+    <div class="tag">Train with Master Splinter to become a true Fraction Ninja!</div>
+    <div class="how">
+      <b>How to Play</b>
+      <ul>
+        <li><b>Goal:</b> Make the exact fraction in <b>Current Pizza Order</b> using whole pizzas + slices.</li>
+        <li><b>Left/Right</b>: add or remove <b>whole pizzas</b>.</li>
+        <li><b>Up/Down</b>: add or remove <b>slices</b> (same denominator as the order).</li>
+        <li><b>Space/Enter</b>: <b>Bake</b> your pizza to submit your answer.</li>
+        <li>Get several correct in a row for <b>combo bonuses</b>! 🥷</li>
+      </ul>
+    </div>
+    <div class="row">
+      <div class="seg" role="group" aria-label="Difficulty">
+        <button class="dif" data-dif="easy" aria-pressed="false">Easy</button>
+        <button class="dif" data-dif="normal" aria-pressed="true">Normal</button>
+        <button class="dif" data-dif="hard" aria-pressed="false">Hard</button>
+      </div>
+      <button class="btn" id="startBtn">▶ Start</button>
+      <button class="btn" id="muteBtn" aria-pressed="false">🔈 Sound: On</button>
+    </div>
+  </div>
+</section>
+<section id="resultOverlay" class="overlay" role="dialog" aria-modal="true">
+  <div class="card">
+    <div class="title">Results</div>
+    <div class="stats">
+      <div class="stat">Score<div class="big" id="resScore">0</div></div>
+      <div class="stat">Accuracy<div class="big" id="resAcc">0%</div></div>
+      <div class="stat">Correct / Orders<div class="big" id="resCt">0 / 0</div></div>
+      <div class="stat">Best Streak<div class="big" id="resBest">0</div></div>
+    </div>
+    <div class="row" style="justify-content:center; margin-top:8px;">
+      <button class="btn" id="retryBtn">🔁 Retry</button>
+      <button class="btn" id="titleBtn">🏠 Title</button>
+    </div>
+  </div>
+</section>
+<script>
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d',{alpha:false});
+function dpr(){return Math.max(1,Math.min(3,window.devicePixelRatio||1));}
+function setScale(){const r=dpr();ctx.setTransform(r,0,0,r,0,0);} 
+function clr(){ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.restore();}
+const ui={score:document.getElementById('score'),streak:document.getElementById('streak'),ordersLeft:document.getElementById('ordersLeft'),combo:document.getElementById('combo'),comboBig:document.getElementById('comboBig'),comboBigMsg:document.getElementById('comboBigMsg'),start:document.getElementById('startOverlay'),result:document.getElementById('resultOverlay'),startBtn:document.getElementById('startBtn'),retryBtn:document.getElementById('retryBtn'),titleBtn:document.getElementById('titleBtn'),muteBtn:document.getElementById('muteBtn'),wMinus:document.getElementById('wMinus'),wPlus:document.getElementById('wPlus'),sMinus:document.getElementById('sMinus'),sPlus:document.getElementById('sPlus'),bake:document.getElementById('bake')};
+const els={resScore:document.getElementById('resScore'),resAcc:document.getElementById('resAcc'),resCt:document.getElementById('resCt'),resBest:document.getElementById('resBest')};
+const weapons=['🥷','🪃','🔪','🗡️','🪓'];
+const combos=[{need:2,text:'POW! Pizza Power!'},{need:3,text:'ZAP! Totally Tubular!'},{need:4,text:"KABOOM! That’s a 67 outta 10, dude!"},{need:5,text:'SPLAT! You’re shreddin’ it!'},{need:6,text:'WHAM! Turtle-riffic!'},{need:7,text:'COWABUNGA LEGEND!!'}];
+const tips=['Count wholes first, then slices.','Denominator = how many slices make a pizza.','Numerator = how many slices we need.','Use ↑/↓ to change slices, ←/→ for whole pizzas.','Mixed number = wholes + a fraction.'];
+const difMap={easy:{den:[2,3,4],orders:8},normal:{den:[3,4,5],orders:10},hard:{den:[4,5,6,8],orders:12}};
+const state={n:0,d:0,whole:0,r:0,score:0,streak:0,best:0,correct:0,total:0,ordersLeft:10,playing:false,muted:false,flash:0,comboOverlay:0,shake:0,turtleJump:0,particles:[],tipIdx:0,difficulty:'normal',turtleMood:'idle',turtleMoodTimer:0};
+let audio=null;function ensureAudio(){if(!audio){try{audio=new (window.AudioContext||window.webkitAudioContext)();}catch{}}if(audio&&audio.state==='suspended'){try{audio.resume();}catch{}}}
+(function(){const kick=()=>{ensureAudio();document.removeEventListener('pointerdown',kick);document.removeEventListener('keydown',kick);};document.addEventListener('pointerdown',kick);document.addEventListener('keydown',kick);})();
+const music=new Audio('game%20music.mp3');music.loop=true;music.volume=0.4;
+function beep(f=660,d=0.12,t='square',g=0.09){if(state.muted||!audio)return;const ct=audio.currentTime;const o=audio.createOscillator();const ga=audio.createGain();o.type=t;o.frequency.setValueAtTime(f,ct);ga.gain.setValueAtTime(g,ct);ga.gain.exponentialRampToValueAtTime(0.0001,ct+d);o.connect(ga).connect(audio.destination);o.start(ct);o.stop(ct+d+0.02);} 
+const SFX={ok:()=>{beep(660,0.08,'square',0.08);setTimeout(()=>beep(880,0.06,'square',0.07),60);},miss:()=>{beep(220,0.12,'triangle',0.08);}};
+function rnd(a){return a[Math.floor(Math.random()*a.length)];}
+function newOrder(){const set=difMap[state.difficulty];state.d=rnd(set.den);state.n=Math.floor(Math.random()*state.d*3)+state.d;state.whole=0;state.r=0;state.flash=0;state.shake=0;state.particles=[];draw();}
+function comboMessage(s){let c=combos[0];for(const cc of combos){if(s>=cc.need)c=cc;}return `${weapons[s%weapons.length]} ${c.text}`;}
+function drawFraction(x,y,num,den,scale=1,color='#fff'){ctx.fillStyle=color;ctx.font=`bold ${18*scale}px monospace`;const n=String(num),d=String(den);const w=Math.max(ctx.measureText(n).width,ctx.measureText(d).width)+10;ctx.fillText(n,x+(w-ctx.measureText(n).width)/2,y);ctx.fillRect(x,y+4,w,2);ctx.fillText(d,x+(w-ctx.measureText(d).width)/2,y+22*scale);return w;}
+function spawnParticles(cx,cy){for(let i=0;i<24;i++)state.particles.push({x:cx,y:cy,vx:(Math.random()*2-1)*3,vy:(Math.random()*-2-1)*3,r:Math.random()*2+2,life:40});}
+function drawParticles(){ctx.save();for(const p of state.particles){ctx.globalAlpha=Math.max(0,p.life/40);ctx.fillStyle=['#ff5b5b','#e6cf47','#a66a33'][p.life%3];ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();}ctx.restore();}
+function stepParticles(){for(const p of state.particles){p.x+=p.vx;p.y+=p.vy;p.vy+=0.15;p.life--;}state.particles=state.particles.filter(p=>p.life>0);} 
+function drawPizza(cx,cy,R,den,filled){ctx.fillStyle='#0f1b28';ctx.beginPath();ctx.arc(cx,cy,R+6,0,Math.PI*2);ctx.fill();ctx.fillStyle='#a66a33';ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fill();ctx.fillStyle='#e6cf47';ctx.beginPath();ctx.arc(cx,cy,R-8,0,Math.PI*2);ctx.fill();for(let i=0;i<den;i++){const a0=-Math.PI/2+(i/den)*Math.PI*2,a1=-Math.PI/2+((i+1)/den)*Math.PI*2;if(i<filled){ctx.fillStyle='#ff5b5b';ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R-8,a0,a1);ctx.closePath();ctx.fill();}ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a0)*(R-8),cy+Math.sin(a0)*(R-8));ctx.stroke();}ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx,cy,R-8,0,Math.PI*2);ctx.stroke();}
+function drawTurtle(x,y,s=1){const g=s;const mood=state.turtleMood;let j=-Math.abs(Math.sin(state.turtleJump*0.2))*6;const headY=y-42*g+j;ctx.save();if(mood==='miss'){const wob=Math.sin(performance.now()*0.02)*0.08;ctx.translate(x,y);ctx.rotate(wob);ctx.translate(-x,-y);}ctx.fillStyle='#2e401f';ctx.beginPath();ctx.ellipse(x,y,46*g,36*g,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#0f1c0b';ctx.lineWidth=3;ctx.stroke();ctx.fillStyle='#3f6b2a';ctx.beginPath();ctx.arc(x,headY,24*g,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#0f1c0b';ctx.stroke();const bcol=['#e23b2a','#2a7be2','#a433c9','#f28c1b'][state.streak%4];ctx.fillStyle=bcol;ctx.fillRect(x-20*g,headY-10*g,40*g,10*g);ctx.beginPath();ctx.moveTo(x+20*g,headY-5*g);ctx.lineTo(x+40*g,headY-12*g);ctx.lineTo(x+34*g,headY+4*g);ctx.closePath();ctx.fill();ctx.fillStyle='#0a1410';ctx.fillRect(x-10*g,headY-6*g,8*g,4*g);ctx.fillRect(x+2*g,headY-6*g,8*g,4*g);ctx.fillStyle='#6a2b1a';ctx.fillRect(x-18*g,y-6*g,36*g,12*g);ctx.fillStyle='#d4b65a';ctx.beginPath();ctx.ellipse(x,y,36*g,28*g,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#6a521e';ctx.stroke();if(mood==='ok'){ctx.fillStyle='#3f6b2a';ctx.fillRect(x-60*g,y-10*g,20*g,10*g);ctx.fillRect(x+40*g,y-10*g,20*g,10*g);ctx.strokeStyle='#0a1410';ctx.beginPath();ctx.arc(x,headY+10*g,6*g,0,Math.PI);ctx.stroke();}else if(mood==='miss'){ctx.fillStyle='#3f6b2a';ctx.fillRect(x-60*g,y+2*g,20*g,10*g);ctx.fillRect(x+40*g,y+2*g,20*g,10*g);ctx.strokeStyle='#0a1410';ctx.beginPath();ctx.arc(x,headY+14*g,6*g,Math.PI,0,true);ctx.stroke();ctx.fillStyle='#0a1410';ctx.fillRect(x-12*g,headY-4*g,6*g,2*g);ctx.fillRect(x+6*g,headY-4*g,6*g,2*g);}else{ctx.fillStyle='#3f6b2a';ctx.fillRect(x-60*g,y-4*g,20*g,10*g);ctx.fillRect(x+40*g,y-4*g,20*g,10*g);}ctx.fillStyle='#2e401f';ctx.fillRect(x-40*g,y+30*g,14*g,8*g);ctx.fillRect(x+26*g,y+30*g,14*g,8*g);ctx.restore();}
+function draw(){const r=dpr();setScale();const w=canvas.width/r,h=canvas.height/r;clr();const PAD=24;const bandH=40;const ax=PAD,ay=bandH+PAD,aw=w-PAD*2,ah=h-(bandH+PAD*2);const sx=state.shake>0?(Math.random()*2-1)*state.shake:0;const sy=state.shake>0?(Math.random()*2-1)*state.shake:0;ctx.save();ctx.translate(sx,sy);ctx.fillStyle='#0c2015';ctx.fillRect(0,0,w,h);ctx.fillStyle='#123a25';ctx.fillRect(0,0,w,bandH+4);ctx.fillStyle=['#e23b2a','#2a7be2','#a433c9','#f28c1b'][state.streak%4];ctx.fillRect(PAD,PAD/2,w-PAD*2,28);ctx.fillStyle='#0c2015';ctx.fillRect(PAD+20,PAD/2+8,60,12);ctx.fillRect(w-PAD-80,PAD/2+8,60,12);ctx.fillStyle='#2a2012';ctx.fillRect(ax,ay,aw,ah);ctx.strokeStyle='#3e2e1c';ctx.lineWidth=3;ctx.strokeRect(ax,ay,aw,ah);ctx.fillStyle='#fff';ctx.font='bold 22px monospace';ctx.fillText('Current Pizza Order',ax+16,ay+36);const cW=ctx.measureText('Current Pizza Order').width;ctx.fillStyle='#3e2e1c';ctx.fillRect(ax+16,ay+42,cW,2);drawFraction(ax+22,ay+80,state.n,state.d,2.0,'#ffdd55');ctx.fillStyle='#fff';ctx.font='bold 22px monospace';ctx.fillText('Your Answer',ax+aw*0.55+16,ay+36);const yW=ctx.measureText('Your Answer').width;ctx.fillStyle='#3e2e1c';ctx.fillRect(ax+aw*0.55+16,ay+42,yW,2);ctx.fillStyle='#b7ffcc';ctx.font='bold 30px monospace';ctx.fillText(String(state.whole),ax+aw*0.55+20,ay+96);drawFraction(ax+aw*0.55+78,ay+74,state.r,state.d,1.6,'#b7ffcc');const centerX=ax+aw*0.5;let fracCX=centerX+170;const pieR=40;const gap=14;const perRow=3;const gridWidth=perRow*(pieR*2)+gap*(perRow-1);const gridStartX=centerX-120-gridWidth/2;let dx=gridStartX+pieR,dy=ay+200;for(let i=0;i<state.whole;i++){drawPizza(dx,dy,pieR,state.d,state.d);dx+=pieR*2+gap;if((i+1)%perRow===0){dx=gridStartX+pieR;dy+=pieR*2+gap;}}const cols=Math.min(state.whole,perRow);const gridRight=cols>0?(gridStartX+(cols-1)*(2*pieR+gap)+2*pieR):gridStartX;if(gridRight+24>fracCX-90){fracCX=gridRight+24+90;}drawPizza(fracCX,ay+210,90,state.d,state.r);drawTurtle(centerX-360,ay+ah*0.78,1);ctx.fillStyle='rgba(233,255,213,0.25)';ctx.font='16px monospace';ctx.fillText('Tip: '+tips[state.tipIdx],ax+16,ay+ah-12);ctx.fillStyle='#9fd7ff';ctx.fillText(`Orders left: ${state.ordersLeft}`,ax+aw-200,ay+ah-12);drawParticles();if(state.flash!==0){ctx.globalAlpha=Math.min(0.35,Math.abs(state.flash)/22*0.35);ctx.fillStyle=state.flash>0?'rgba(54,210,104,1)':'rgba(255,91,91,1)';ctx.fillRect(0,0,w,h);ctx.globalAlpha=1;}ctx.restore();if(state.comboOverlay>0){ui.comboBig.style.display='grid';const t=state.comboOverlay;const a=Math.min(1,t/10);ui.comboBig.style.opacity=String(a*(0.6+0.4*Math.abs(Math.sin(t*0.25))));state.comboOverlay--;}else{ui.comboBig.style.display='none';}if(state.shake>0)state.shake*=0.9;if(state.shake<0.1)state.shake=0;if(state.turtleJump>0)state.turtleJump--;stepParticles();if(state.turtleMoodTimer>0){state.turtleMoodTimer--;if(state.turtleMoodTimer===0){state.turtleMood='idle';}}}
+function updateHUD(){ui.score.textContent=state.score;ui.streak.textContent=state.streak;ui.ordersLeft.textContent=state.ordersLeft;ui.combo.textContent=state.streak>0?comboMessage(state.streak):'';}
+function submit(){if(!state.playing)return;state.total++;const totalSlices=state.whole*state.d+state.r;if(totalSlices===state.n){state.correct++;state.streak++;state.best=Math.max(state.best,state.streak);state.score+=100+state.streak*25;state.flash=18;ui.combo.textContent=comboMessage(state.streak);ui.comboBigMsg.textContent=ui.combo.textContent;state.comboOverlay=90;state.turtleJump=24;state.turtleMood='ok';state.turtleMoodTimer=50;spawnParticles(canvas.width/dpr()*0.75,canvas.height/dpr()*0.35);SFX.ok();}else{state.streak=0;state.flash=-18;ui.combo.textContent='Oops! Count wholes, then the slices.';state.shake=8;state.tipIdx=(state.tipIdx+1)%tips.length;state.turtleMood='miss';state.turtleMoodTimer=60;SFX.miss();}updateHUD();if(--state.ordersLeft<=0){endGame();}else{newOrder();}}
+function endGame(){state.playing=false;els.resScore.textContent=state.score;const acc=state.total?Math.round(100*state.correct/state.total):0;els.resAcc.textContent=acc+'%';els.resCt.textContent=`${state.correct} / ${state.total}`;els.resBest.textContent=state.best;ui.result.style.display='grid';}
+window.addEventListener('keydown',e=>{if(!state.playing){if(ui.start.style.display!=='none'&&(e.code==='Space'||e.code==='Enter')){ensureAudio();begin();}return;}if(e.code==='ArrowLeft'){state.whole=Math.max(0,state.whole-1);}else if(e.code==='ArrowRight'){state.whole=Math.min(12,state.whole+1);}else if(e.code==='ArrowUp'){state.r=Math.min(state.d-1,state.r+1);}else if(e.code==='ArrowDown'){state.r=Math.max(0,state.r-1);}else if(e.code==='Space'||e.code==='Enter'){e.preventDefault();submit();}updateHUD();draw();});
+ui.wMinus.addEventListener('click',()=>{state.whole=Math.max(0,state.whole-1);updateHUD();draw();});
+ui.wPlus.addEventListener('click',()=>{state.whole=Math.min(12,state.whole+1);updateHUD();draw();});
+ui.sMinus.addEventListener('click',()=>{state.r=Math.max(0,state.r-1);updateHUD();draw();});
+ui.sPlus.addEventListener('click',()=>{state.r=Math.min(state.d-1,state.r+1);updateHUD();draw();});
+ui.bake.addEventListener('click',()=>{submit();});
+ui.startBtn.addEventListener('click',()=>{ensureAudio();begin();});
+ui.retryBtn.addEventListener('click',()=>{ui.result.style.display='none';startGame();});
+ui.titleBtn.addEventListener('click',()=>{ui.result.style.display='none';ui.start.style.display='grid';});
+ui.muteBtn.addEventListener('click',()=>{state.muted=!state.muted;const label=state.muted?'🔇 Sound: Off':'🔈 Sound: On';ui.muteBtn.textContent=label;const hud=document.getElementById('muteBtnHUD');if(hud){hud.textContent=label;hud.setAttribute('aria-pressed',String(!state.muted));}if(state.muted){music.pause();}else{ensureAudio();music.play().catch(()=>{});}});
+const hudBtn=document.getElementById('muteBtnHUD');
+if(hudBtn){hudBtn.addEventListener('click',()=>{state.muted=!state.muted;const label=state.muted?'🔇 Sound: Off':'🔈 Sound: On';hudBtn.textContent=label;ui.muteBtn.textContent=label;if(state.muted){music.pause();}else{ensureAudio();music.play().catch(()=>{});}});} 
+document.querySelectorAll('.dif').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.dif').forEach(x=>x.setAttribute('aria-pressed','false'));b.setAttribute('aria-pressed','true');state.difficulty=b.dataset.dif;}));
+function begin(){ui.start.style.display='none';music.currentTime=0;music.play().catch(()=>{});startGame();}
+function startGame(){const set=difMap[state.difficulty];state.score=0;state.streak=0;state.best=0;state.correct=0;state.total=0;state.ordersLeft=set.orders;state.playing=true;newOrder();updateHUD();draw();}
+function loop(){draw();requestAnimationFrame(loop);} requestAnimationFrame(loop);
+function totalSlices(w,r,d){return w*d+r;}
+function selfTests(){try{console.assert(typeof totalSlices==='function','totalSlices missing');console.assert(totalSlices(1,2,4)===6,'t1');console.assert(totalSlices(0,3,3)===3,'t2');console.assert(totalSlices(2,0,5)===10,'t3');console.assert(totalSlices(3,2,4)===14,'t4');console.assert(typeof drawFraction==='function','drawFraction missing');console.assert(typeof comboMessage==='function','comboMessage missing');}catch(e){console.error('self-tests',e)}}
+selfTests();
+startOverlay.style.display='grid';
+</script>
+</body>
+</html>
